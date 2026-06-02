@@ -401,54 +401,44 @@
   /* ─────────────────────────────────────────────────────────────
    * SECTION 9 — STUDY GROUPS (Full Screen)
    * ───────────────────────────────────────────────────────────── */
-  const StudyGroups = {
-    // Use a SHARED key (no UID prefix) so groups created by one user
-    // can be found by another user joining via code on the same device/browser.
-    // For cross-device support, the code is shown to the creator so they can
-    // share it; the join lookup searches both shared and user-specific stores.
-    _sharedKey: 'sscai_shared_groups',
-    _getShared() { try { return JSON.parse(localStorage.getItem(this._sharedKey) || '[]') || []; } catch { return []; } },
-    _setShared(v) { try { localStorage.setItem(this._sharedKey, JSON.stringify(v)); } catch {} },
-    getAll() {
-      // Return groups where current user is a member
-      const all = this._getShared();
-      const me = uid();
-      return all.filter(g => g.members.includes(me));
-    },
-    create(name, exam) {
-      const all = this._getShared();
-      const group = {
-        id: 'grp_' + Date.now(),
-        name, exam,
-        code: Math.random().toString(36).substring(2,8).toUpperCase(),
-        members: [uid()],
-        messages: [],
-        createdAt: Date.now()
-      };
-      all.push(group);
-      this._setShared(all);
-      toast('✅ Study group "' + name + '" created! Code: ' + group.code, 4000);
-      return group;
-    },
-    join(code) {
-      const all = this._getShared();
-      const group = all.find(g => g.code === code.toUpperCase());
-      if (!group) { toast('❌ Group not found. Check the code and try again.'); return null; }
-      const me = uid();
-      if (!group.members.includes(me)) group.members.push(me);
-      this._setShared(all);
-      toast('✅ Joined group "' + group.name + '"!', 3000);
-      return group;
-    },
-    addMessage(groupId, text) {
-      const all = this._getShared();
-      const g = all.find(g => g.id === groupId);
-      if (!g) return;
-      g.messages.push({ uid: uid(), name: (typeof state!=='undefined'?state.user?.displayName:'Student')||'Student', text, ts: Date.now() });
-      if (g.messages.length > 200) g.messages.splice(0, g.messages.length - 200);
-      this._setShared(all);
-    }
-  };
+// REPLACE the entire StudyGroups object with this:
+const StudyGroups = {
+  async create(name, exam) {
+    const db = window._firebaseDb;
+    const { doc, setDoc, collection } = window._firebaseFns;
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const id = 'grp_' + Date.now();
+    const group = { id, name, exam, code, members: [uid()], messages: [], createdAt: Date.now() };
+    await setDoc(doc(collection(db, 'studyGroups'), id), group);
+    toast('✅ Study group "' + name + '" created! Code: ' + code, 4000);
+    return group;
+  },
+  async join(code) {
+    const db = window._firebaseDb;
+    const { collection, query, where, getDocs, updateDoc, arrayUnion } = window._firebaseFns;
+    const q = query(collection(db, 'studyGroups'), where('code', '==', code.toUpperCase()));
+    const snap = await getDocs(q);
+    if (snap.empty) { toast('❌ Group not found. Check the code and try again.'); return null; }
+    const docRef = snap.docs[0].ref;
+    const group = snap.docs[0].data();
+    await updateDoc(docRef, { members: arrayUnion(uid()) });
+    toast('✅ Joined group "' + group.name + '"!', 3000);
+    return group;
+  },
+  async getAll() {
+    const db = window._firebaseDb;
+    const { collection, query, where, getDocs } = window._firebaseFns;
+    const q = query(collection(db, 'studyGroups'), where('members', 'array-contains', uid()));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data());
+  },
+  async addMessage(groupId, text) {
+    const db = window._firebaseDb;
+    const { doc, updateDoc, arrayUnion } = window._firebaseFns;
+    const msg = { uid: uid(), name: (typeof state !== 'undefined' ? state.user?.displayName : 'Student') || 'Student', text, ts: Date.now() };
+    await updateDoc(doc(db, 'studyGroups', groupId), { messages: arrayUnion(msg) });
+  }
+};
 
   /* ─────────────────────────────────────────────────────────────
    * SECTION 10 — MOCK TEST ENGINE (DeepSeek-powered)
