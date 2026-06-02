@@ -516,6 +516,7 @@ const StudyGroups = {
     },
     closeModal(id) {
       document.getElementById(id)?.classList.remove('cf-active');
+      if (id === 'cf-groups-modal') CF._stopChatPolling();
       const others = document.querySelectorAll('.cf-modal.cf-active');
       if (!others.length) document.body.style.overflow = '';
     },
@@ -886,10 +887,10 @@ Format: [{"q":"question text","opts":["A","B","C","D"],"ans":0,"topic":"${subjec
     },
 
     /* ── STUDY GROUPS RENDERING (Full Screen) ── */
-    async _renderGroups() {
+    _renderGroups() {
       const body = document.getElementById('cf-groups-modal_body');
       if (!body) return;
-      const groups = await StudyGroups.getAll();
+      const groups = StudyGroups.getAll();
       body.innerHTML = `
         <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
           <button class="cf-btn cf-btn-primary" onclick="CF._showCreateGroup()">➕ Create Group</button>
@@ -924,12 +925,12 @@ Format: [{"q":"question text","opts":["A","B","C","D"],"ans":0,"topic":"${subjec
           <button class="cf-btn cf-btn-primary" style="width:100%" onclick="CF._createGroup()">Create</button>
         </div>`;
     },
-    async _createGroup() {
+    _createGroup() {
       const name = document.getElementById('cf-grp-name')?.value?.trim();
       const exam = document.getElementById('cf-grp-exam')?.value;
       if (!name) { toast('Please enter a group name'); return; }
-      await StudyGroups.create(name, exam);
-      await CF._renderGroups();
+      StudyGroups.create(name, exam);
+      CF._renderGroups();
     },
     _showJoinGroup() {
       const el = document.getElementById('cf-group-form');
@@ -940,41 +941,77 @@ Format: [{"q":"question text","opts":["A","B","C","D"],"ans":0,"topic":"${subjec
           <button class="cf-btn cf-btn-primary" style="width:100%" onclick="CF._joinGroup()">Join</button>
         </div>`;
     },
-    async _joinGroup() {
+    _joinGroup() {
       const code = document.getElementById('cf-join-code')?.value?.trim();
       if (!code) { toast('Please enter a group code'); return; }
-      const g = await StudyGroups.join(code);
-      if (g) await CF._renderGroups();
+      const g = StudyGroups.join(code);
+      if (g) CF._renderGroups();
     },
-    async _openGroupChat(groupId) {
-      const groups = await StudyGroups.getAll();
-      const g = groups.find(g=>g.id===groupId);
-      if (!g) return;
-      const body = document.getElementById('cf-groups-modal_body');
-      body.innerHTML = `
-        <button class="cf-btn cf-btn-ghost" style="margin-bottom:12px" onclick="CF._renderGroups()">← Back to Groups</button>
-        <div class="cf-chat-header"><strong>${g.name}</strong> <span class="cf-topic-tag">${EXAM_CONFIGS[g.exam]?.label||g.exam}</span> · 👥 ${g.members.length}</div>
-        <div class="cf-chat-messages cf-chat-fullscreen" id="cf-chat-msgs">
-          ${g.messages.length ? g.messages.map(m=>`
+    _chatPollInterval: null,
+    _chatLastMsgCount: 0,
+    _stopChatPolling() {
+      if (CF._chatPollInterval) { clearInterval(CF._chatPollInterval); CF._chatPollInterval = null; }
+      CF._chatLastMsgCount = 0;
+    },
+    _renderChatMessages(messages, groupId) {
+      const msgs = document.getElementById('cf-chat-msgs');
+      if (!msgs) return;
+      const wasAtBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 60;
+      msgs.innerHTML = messages.length
+        ? messages.map(m=>`
             <div class="cf-chat-msg ${m.uid===uid()?'cf-chat-mine':''}">
               <div class="cf-chat-name">${m.name}</div>
               <div class="cf-chat-bubble">${m.text.replace(/</g,'&lt;')}</div>
               <div class="cf-chat-time">${new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
-            </div>`).join('') : '<div class="cf-muted" style="text-align:center;padding:24px">No messages yet. Say hello! 👋</div>'}
-        </div>
+            </div>`).join('')
+        : '<div class="cf-muted" style="text-align:center;padding:24px">No messages yet. Say hello! 👋</div>';
+      if (wasAtBottom) msgs.scrollTop = msgs.scrollHeight;
+    },
+    async _openGroupChat(groupId) {
+      CF._stopChatPolling();
+      const db = window._firebaseDb;
+      const { doc, getDoc } = window._firebaseFns;
+      const snap = await getDoc(doc(db, 'studyGroups', groupId));
+      if (!snap.exists()) { toast('❌ Group not found'); return; }
+      const g = snap.data();
+      const body = document.getElementById('cf-groups-modal_body');
+      body.innerHTML = `
+        <button class="cf-btn cf-btn-ghost" style="margin-bottom:12px" onclick="CF._stopChatPolling();CF._renderGroups()">← Back to Groups</button>
+        <div class="cf-chat-header"><strong>${g.name}</strong> <span class="cf-topic-tag">${EXAM_CONFIGS[g.exam]?.label||g.exam}</span> · 👥 ${g.members.length}</div>
+        <div class="cf-chat-messages cf-chat-fullscreen" id="cf-chat-msgs"></div>
         <div class="cf-chat-input-row">
           <input class="cf-input" id="cf-chat-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')CF._sendGroupMsg('${groupId}')" />
           <button class="cf-btn cf-btn-primary" onclick="CF._sendGroupMsg('${groupId}')">Send</button>
         </div>`;
-      const msgs = document.getElementById('cf-chat-msgs');
-      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+      CF._renderChatMessages(g.messages || [], groupId);
+      CF._chatLastMsgCount = (g.messages || []).length;
+      CF._chatPollInterval = setInterval(async () => {
+        try {
+          const s = await getDoc(doc(db, 'studyGroups', groupId));
+          if (!s.exists()) { CF._stopChatPolling(); return; }
+          const data = s.data();
+          const msgs = data.messages || [];
+          if (msgs.length !== CF._chatLastMsgCount) {
+            CF._chatLastMsgCount = msgs.length;
+            CF._renderChatMessages(msgs, groupId);
+          }
+        } catch(e) {}
+      }, 5000);
     },
-    _sendGroupMsg(groupId) {
+    async _sendGroupMsg(groupId) {
       const input = document.getElementById('cf-chat-input');
       if (!input || !input.value.trim()) return;
-      StudyGroups.addMessage(groupId, input.value.trim());
+      const text = input.value.trim();
       input.value = '';
-      CF._openGroupChat(groupId);
+      await StudyGroups.addMessage(groupId, text);
+      const db = window._firebaseDb;
+      const { doc, getDoc } = window._firebaseFns;
+      const snap = await getDoc(doc(db, 'studyGroups', groupId));
+      if (snap.exists()) {
+        const msgs = snap.data().messages || [];
+        CF._chatLastMsgCount = msgs.length;
+        CF._renderChatMessages(msgs, groupId);
+      }
     },
 
     /* ── DAILY GOAL RENDERING ── */
