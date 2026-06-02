@@ -25,7 +25,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
     import { getAuth, GoogleAuthProvider, OAuthProvider, signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    import { getFirestore, doc, setDoc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyCUfUs2JHPM8GIVmxRm0gZQNgqAmvOPL6w",
@@ -49,7 +49,7 @@
     window._firebaseDb = db;
     window._googleProvider = googleProvider;
     window._appleProvider = appleProvider;
-    window._firebaseFns = { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, doc, setDoc, getDoc, updateDoc };
+    window._firebaseFns = { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, arrayUnion };
 
     window.__firebaseReady = true; // flag so initApp can detect it fired early
     window.dispatchEvent(new Event('firebaseReady'));
