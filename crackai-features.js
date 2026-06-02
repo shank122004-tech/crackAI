@@ -886,10 +886,10 @@ Format: [{"q":"question text","opts":["A","B","C","D"],"ans":0,"topic":"${subjec
     },
 
     /* ── STUDY GROUPS RENDERING (Full Screen) ── */
-    _renderGroups() {
+    async _renderGroups() {
       const body = document.getElementById('cf-groups-modal_body');
       if (!body) return;
-      const groups = StudyGroups.getAll();
+      const groups = await StudyGroups.getAll();
       body.innerHTML = `
         <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
           <button class="cf-btn cf-btn-primary" onclick="CF._showCreateGroup()">➕ Create Group</button>
@@ -924,12 +924,12 @@ Format: [{"q":"question text","opts":["A","B","C","D"],"ans":0,"topic":"${subjec
           <button class="cf-btn cf-btn-primary" style="width:100%" onclick="CF._createGroup()">Create</button>
         </div>`;
     },
-    _createGroup() {
+    async _createGroup() {
       const name = document.getElementById('cf-grp-name')?.value?.trim();
       const exam = document.getElementById('cf-grp-exam')?.value;
       if (!name) { toast('Please enter a group name'); return; }
-      StudyGroups.create(name, exam);
-      CF._renderGroups();
+      await StudyGroups.create(name, exam);
+      await CF._renderGroups();
     },
     _showJoinGroup() {
       const el = document.getElementById('cf-group-form');
@@ -940,14 +940,14 @@ Format: [{"q":"question text","opts":["A","B","C","D"],"ans":0,"topic":"${subjec
           <button class="cf-btn cf-btn-primary" style="width:100%" onclick="CF._joinGroup()">Join</button>
         </div>`;
     },
-    _joinGroup() {
+    async _joinGroup() {
       const code = document.getElementById('cf-join-code')?.value?.trim();
       if (!code) { toast('Please enter a group code'); return; }
-      const g = StudyGroups.join(code);
-      if (g) CF._renderGroups();
+      const g = await StudyGroups.join(code);
+      if (g) await CF._renderGroups();
     },
-    _openGroupChat(groupId) {
-      const groups = StudyGroups.getAll();
+    async _openGroupChat(groupId) {
+      const groups = await StudyGroups.getAll();
       const g = groups.find(g=>g.id===groupId);
       if (!g) return;
       const body = document.getElementById('cf-groups-modal_body');
