@@ -36,7 +36,7 @@
 (function () {
   'use strict';
 
-  const BASE_URL     = 'https://easyfreepdf.online'; // ← change to your domain
+  const BASE_URL     = 'https://shank122004-tech.github.io/crackAI/'; // ← change to your domain
   const SITE_NAME    = 'CrackAI';
   const DEFAULT_DESC = 'AI-powered exam preparation for SSC CGL, CHSL, UPSC, RRB, Class 9–12. Solve questions from photos, PDFs. Free to try.';
   const OG_IMAGE     = BASE_URL + '/og-image.png'; // create a 1200×630 banner image
